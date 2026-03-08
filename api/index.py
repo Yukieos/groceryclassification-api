@@ -28,9 +28,9 @@ def search_price(q: str = Query(...)):
         cur.execute(
             """
             SELECT full_name, vendor, unit_price,
-                   word_similarity(%s, lower(full_name)) AS sim
+                   strict_word_similarity(%s, lower(full_name)) AS sim
             FROM products
-            WHERE %s <%% lower(full_name)
+            WHERE %s <<%%  lower(full_name)
             ORDER BY sim DESC, unit_price ASC
             LIMIT 5
             """,
