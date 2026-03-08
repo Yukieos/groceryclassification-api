@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+torch
+torchvision
+easyocr
+opencv-python-headless
+pillow
+numpy
+psycopg2-binary
+pandas
+python-multipart
