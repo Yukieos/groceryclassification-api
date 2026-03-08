@@ -23,7 +23,7 @@ def search_price(q: str = Query(..., description="请输入商品名称")):
         host="db-foodprice.cs76a4esi9a9.us-east-1.rds.amazonaws.com",
         dbname="postgres",
         user="yukieos",
-        password="drinkmoretea1",
+        password="+Qw20041002",
         port=5432
     )
     cur = conn.cursor()
