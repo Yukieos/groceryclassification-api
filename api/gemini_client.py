@@ -37,10 +37,6 @@ class ProductIdentification(BaseModel):
 
 
 def infer_category(img_bytes: bytes, mime_type: str = "image/jpeg"):
-    """
-    输入:图片二进制
-    输出:{"category": str|None, "raw_text": str|None, "method": "gemini"/"manual"}
-    """
     response = _get_client().models.generate_content(
         model=MODEL_NAME,
         contents=[

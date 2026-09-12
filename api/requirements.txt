@@ -3,3 +3,5 @@ uvicorn
 psycopg2-binary
 python-multipart
 requests
+google-genai
+pydantic

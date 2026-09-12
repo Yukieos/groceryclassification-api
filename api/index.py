@@ -1,11 +1,12 @@
 from typing import List, Optional
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import kroger_client
 from db import search_price
+from gemini_client import infer_category
 
 app = FastAPI()
 
@@ -15,6 +16,14 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+@app.post("/infer")
+async def infer(photo: UploadFile = File(...)):
+    if photo.content_type.split("/")[0] != "image":
+        raise HTTPException(400, "Only image uploads are supported.")
+    img_bytes = await photo.read()
+    return infer_category(img_bytes, mime_type=photo.content_type)
 
 
 @app.get("/search_price")
