@@ -3,6 +3,22 @@ import argparse
 from db import get_connection, normalize
 from traderjoes_client import fetch_store_catalog
 
+# User's NYC stores (from traderjoes.com store locator), so a plain
+# `python sync_traderjoes.py --nyc` syncs all of them with readable vendor
+# labels instead of bare store codes.
+NYC_STORES = {
+    "542": "Trader Joe's - 72nd & Broadway",
+    "543": "Trader Joe's - Chelsea",
+    "546": "Trader Joe's - East Village",
+    "538": "Trader Joe's - Essex Crossing",
+    "576": "Trader Joe's - Harlem",
+    "544": "Trader Joe's - Murray Hill",
+    "539": "Trader Joe's - SoHo",
+    "540": "Trader Joe's - Union Square",
+    "571": "Trader Joe's - Upper East Side",
+    "545": "Trader Joe's - Upper West Side",
+}
+
 
 def sync(store_code: str, vendor_label: str = "Trader Joe's"):
     items = fetch_store_catalog(store_code)
@@ -34,12 +50,22 @@ def sync(store_code: str, vendor_label: str = "Trader Joe's"):
     conn.commit()
     cur.close()
     conn.close()
-    print(f"Synced {inserted} in-stock items for Trader Joe's store {store_code}")
+    print(f"Synced {inserted} in-stock items for {vendor_label} (store {store_code})")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Sync one Trader Joe's store's catalog into Postgres")
-    parser.add_argument("store_code", help="Trader Joe's store code, e.g. 701")
-    parser.add_argument("--vendor-label", default="Trader Joe's")
+    parser = argparse.ArgumentParser(description="Sync one or more Trader Joe's stores' catalogs into Postgres")
+    parser.add_argument("store_codes", nargs="*", help="Trader Joe's store code(s), e.g. 701 706")
+    parser.add_argument("--vendor-label", default=None, help="Only used with a single store_code")
+    parser.add_argument("--nyc", action="store_true", help="Sync all of the user's configured NYC stores")
     args = parser.parse_args()
-    sync(args.store_code, args.vendor_label)
+
+    if args.nyc:
+        for code, label in NYC_STORES.items():
+            sync(code, label)
+    elif args.store_codes:
+        for code in args.store_codes:
+            label = args.vendor_label or NYC_STORES.get(code, "Trader Joe's")
+            sync(code, label)
+    else:
+        parser.error("Provide store_codes, or use --nyc")
