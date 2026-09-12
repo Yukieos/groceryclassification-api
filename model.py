@@ -1,72 +1,61 @@
-import cv2
-import torch
-import easyocr
-from PIL import Image
-from torchvision import transforms
-import numpy as np
-from torchvision import models
+import os
+from typing import Optional
 
-OCR_LANGS = ['en']
-ocr_reader = easyocr.Reader(OCR_LANGS, gpu=torch.cuda.is_available())
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-CATEGORIES = ['Apple', 'Asparagus', 'Aubergine', 'Avocado', 'Banana', 'Brown-Cap-Mushroom', 'Cabbage', 'Cantaloupe', 'Carrots', 'Cucumber', 'Egg', 'Galia-Melon', 'Garlic', 'Ginger', 'Honeydew-Melon', 'Juice', 'Kiwi', 'Leek', 'Lemon', 'Lime', 'Mango', 'Milk', 'Nectarine', 'Onion', 'Orange', 'Papaya', 'Passion-Fruit', 'Peach', 'Pear', 'Pepper', 'Pineapple', 'Plum', 'Pomegranate', 'Potato', 'Red-Beet', 'Red-Grapefruit', 'Satsumas', 'Tofu', 'Tomato', 'Watermelon', 'Yogurt', 'Zucchini']  
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-num_classes = len(CATEGORIES)
-cls_model = models.mobilenet_v3_small(pretrained=False)
-cls_model.classifier[3] = torch.nn.Linear(
-    cls_model.classifier[3].in_features, num_classes
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+
+CONFIDENCE_THRESHOLD = 0.6
+
+PROMPT = (
+    "You are looking at a photo of a single grocery item. Identify the specific "
+    "product using the most specific name a shopper would search for when "
+    "comparing prices (e.g. 'Honeycrisp Apple', 'Organic Whole Milk', "
+    "'Lay's Classic Potato Chips'), covering produce, dairy, packaged and "
+    "branded goods alike. Also transcribe any legible brand or label text "
+    "visible in the image, if any. If you cannot confidently identify a "
+    "grocery product in the image, set confidence to 0 and category to an "
+    "empty string."
 )
-cls_model.load_state_dict(
-    torch.load(
-        'app/best_classifer.pth', 
-        map_location=device
+
+
+class ProductIdentification(BaseModel):
+    category: str
+    raw_text: Optional[str] = None
+    confidence: float
+
+
+def infer_category(img_bytes: bytes, mime_type: str = "image/jpeg"):
+    """
+    输入:图片二进制
+    输出:{"category": str|None, "raw_text": str|None, "method": "gemini"/"manual"}
+    """
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=[
+            PROMPT,
+            types.Part.from_bytes(data=img_bytes, mime_type=mime_type),
+        ],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_json_schema=ProductIdentification.model_json_schema(),
+        ),
     )
-)
-cls_model.to(device).eval()
+    result = ProductIdentification.model_validate_json(response.text)
 
-val_tf = transforms.Compose([
-    transforms.Resize((224,224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485,0.456,0.406],
-                         std =[0.229,0.224,0.225])
-])
-
-def infer_category(
-    img_bytes: bytes,
-    ocr_conf_thresh: float = 0.5,
-    cls_conf_thresh: float = 0.6
-):
-    """
-    输入：图片二进制
-    输出：{"category": str|None, "raw_text": str|None, "method": "ocr"/"classification"/"manual"}
-    """
-    arr = np.frombuffer(img_bytes, np.uint8)
-    img_bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
-    ocr_results = ocr_reader.readtext(img_rgb)
-    texts = [t for (_, t, p) in ocr_results if p >= ocr_conf_thresh]
-    raw = ' '.join(texts).lower().strip()
-    for cat in CATEGORIES:
-        if cat in raw:
-            return {"category": cat, "raw_text": raw, "method": "ocr"}
-
-    pil = Image.fromarray(img_rgb)
-    x = val_tf(pil).unsqueeze(0).to(device)
-    with torch.no_grad():
-        logits = cls_model(x)
-        probs = torch.softmax(logits, dim=1).squeeze()
-        conf, idx = torch.max(probs, dim=0)
-        if conf.item() >= cls_conf_thresh:
-            return {
-                "category": CATEGORIES[idx.item()],
-                "raw_text": None,
-                "method": "classification"
-            }
+    if result.confidence < CONFIDENCE_THRESHOLD or not result.category:
+        return {
+            "category": None,
+            "raw_text": result.raw_text or None,
+            "method": "manual",
+        }
 
     return {
-        "category": None,
-        "raw_text": raw if raw else None,
-        "method": "manual"
+        "category": result.category,
+        "raw_text": result.raw_text or None,
+        "method": "gemini",
     }

@@ -17,11 +17,11 @@ def search_price(q: str = Query(...)):
     try:
         q_lower = q.lower().strip()
         conn = psycopg2.connect(
-            host=os.environ.get("DB_HOST", "db-foodprice.cs76a4esi9a9.us-east-1.rds.amazonaws.com"),
+            host=os.environ["DB_HOST"],
             dbname=os.environ.get("DB_NAME", "postgres"),
-            user=os.environ.get("DB_USER", "yukieos"),
-            password=os.environ.get("DB_PASSWORD", "+Qw20041002"),
-            port=5432,
+            user=os.environ["DB_USER"],
+            password=os.environ["DB_PASSWORD"],
+            port=os.environ.get("DB_PORT", 5432),
             sslmode="require"
         )
         cur = conn.cursor()

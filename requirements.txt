@@ -1,11 +1,6 @@
 fastapi
 uvicorn[standard]
-torch
-torchvision
-easyocr
-opencv-python-headless
-pillow
-numpy
+google-genai
+pydantic
 psycopg2-binary
-pandas
 python-multipart

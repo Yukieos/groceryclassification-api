@@ -23,5 +23,5 @@ async def infer(photo: UploadFile = File(...)):
     if photo.content_type.split('/')[0] != 'image':
         raise HTTPException(400, "Only image uploads are supported.")
     img_bytes = await photo.read()
-    result = infer_category(img_bytes)
+    result = infer_category(img_bytes, mime_type=photo.content_type)
     return result 

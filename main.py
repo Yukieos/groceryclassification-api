@@ -4,6 +4,7 @@ from model import infer_category
 from utils import normalize
 import psycopg2
 import uvicorn
+import os
 
 app = FastAPI(
     title="Grocery Photo Search API",
@@ -27,7 +28,7 @@ async def infer(photo: UploadFile = File(...)):
     if photo.content_type.split('/')[0] != 'image':
         raise HTTPException(400, "Only image uploads are supported.")
     img_bytes = await photo.read()
-    result = infer_category(img_bytes)
+    result = infer_category(img_bytes, mime_type=photo.content_type)
     return result
 
 @app.get("/search_price")
@@ -35,11 +36,12 @@ def search_price(q: str = Query(..., description="Name of the item")):
     norm_q = normalize(q)
 
     conn = psycopg2.connect(
-        host="db-foodprice.cs76a4esi9a9.us-east-1.rds.amazonaws.com",
-        dbname="postgres",
-        user="yukieos",
-        password="+Qw20041002",
-        port=5432
+        host=os.environ["DB_HOST"],
+        dbname=os.environ.get("DB_NAME", "postgres"),
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        port=os.environ.get("DB_PORT", 5432),
+        sslmode="require"
     )
     cur = conn.cursor()
     cur.execute(

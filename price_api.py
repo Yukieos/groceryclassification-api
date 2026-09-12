@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
+import os
 from utils import normalize
 
 app = FastAPI(
@@ -20,11 +21,12 @@ def search_price(q: str = Query(..., description="请输入商品名称")):
     norm_q = normalize(q)
 
     conn = psycopg2.connect(
-        host="db-foodprice.cs76a4esi9a9.us-east-1.rds.amazonaws.com",
-        dbname="postgres",
-        user="yukieos",
-        password="+Qw20041002",
-        port=5432
+        host=os.environ["DB_HOST"],
+        dbname=os.environ.get("DB_NAME", "postgres"),
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        port=os.environ.get("DB_PORT", 5432),
+        sslmode="require"
     )
     cur = conn.cursor()
     cur.execute(
