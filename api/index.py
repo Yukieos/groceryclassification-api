@@ -4,7 +4,10 @@ from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+import os
+
 import kroger_client
+from alerts import check_alerts, create_alert, delete_alert, list_alerts
 from db import get_connection, normalize, record_price_observation, search_price, thirty_day_low
 from gemini_client import infer_category
 from rate_limit import check_and_increment
@@ -156,3 +159,52 @@ def shopping_list(payload: ShoppingListRequest):
         "per_item_options": per_item_matches,
         "one_stop_ranking": one_stop_ranking,
     }
+
+
+class PriceAlertRequest(BaseModel):
+    email: str
+    item: str
+    target_price: float
+
+
+@app.post("/price_alerts")
+def create_price_alert(payload: PriceAlertRequest):
+    try:
+        alert_id = create_alert(payload.email, payload.item, payload.target_price)
+        return {"id": alert_id}
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
+
+
+@app.get("/price_alerts")
+def get_price_alerts(email: str = Query(...)):
+    try:
+        return list_alerts(email)
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
+
+
+@app.delete("/price_alerts/{alert_id}")
+def remove_price_alert(alert_id: int, email: str = Query(...)):
+    try:
+        deleted = delete_alert(alert_id, email)
+        if not deleted:
+            raise HTTPException(404, "Alert not found")
+        return {"deleted": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}
+
+
+@app.get("/cron/check_alerts")
+def cron_check_alerts(request: Request):
+    cron_secret = os.environ.get("CRON_SECRET")
+    if cron_secret:
+        auth = request.headers.get("authorization", "")
+        if auth != f"Bearer {cron_secret}":
+            raise HTTPException(401, "Unauthorized")
+    try:
+        return check_alerts()
+    except Exception as e:
+        return {"error": str(e), "type": type(e).__name__}

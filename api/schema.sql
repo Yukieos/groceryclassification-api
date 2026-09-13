@@ -37,3 +37,14 @@ CREATE TABLE IF NOT EXISTS price_history (
 
 CREATE INDEX IF NOT EXISTS idx_price_history_lookup
     ON price_history (normalized_name, vendor, observed_date);
+
+CREATE TABLE IF NOT EXISTS price_alerts (
+    id SERIAL PRIMARY KEY,
+    email TEXT NOT NULL,
+    search_term TEXT NOT NULL,
+    normalized_term TEXT NOT NULL,
+    target_price NUMERIC(10, 2) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT true,
+    last_notified_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

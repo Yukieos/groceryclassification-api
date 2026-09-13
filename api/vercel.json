@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/cron/check_alerts", "schedule": "0 * * * *" }
+  ]
+}
