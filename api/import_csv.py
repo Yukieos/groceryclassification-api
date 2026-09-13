@@ -2,6 +2,7 @@ import argparse
 import csv
 
 from db import get_connection, normalize
+from size_parse import parse_pack_size
 
 
 def import_csv(path: str):
@@ -24,12 +25,13 @@ def import_csv(path: str):
                 continue
 
             normalized = (row.get("normalized_name") or "").strip() or normalize(full_name)
+            pack_qty, pack_unit = parse_pack_size(full_name)
             cur.execute(
                 """
-                INSERT INTO products (source, vendor, full_name, normalized_name, category, unit_price)
-                VALUES ('manual', %s, %s, %s, %s, %s)
+                INSERT INTO products (source, vendor, full_name, normalized_name, category, unit_price, pack_qty, pack_unit)
+                VALUES ('manual', %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (vendor, full_name, normalized, row.get("category"), price),
+                (vendor, full_name, normalized, row.get("category"), price, pack_qty, pack_unit),
             )
             count += 1
 

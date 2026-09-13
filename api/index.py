@@ -1,12 +1,14 @@
 from typing import List, Optional
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import kroger_client
 from db import search_price
 from gemini_client import infer_category
+from rate_limit import check_and_increment
+from size_parse import unit_price_info
 
 app = FastAPI()
 
@@ -17,11 +19,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+INFER_RATE_LIMIT = 20  # per client per hour - Gemini calls cost money
+
+
+def _client_key(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    return forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
+
 
 @app.post("/infer")
-async def infer(photo: UploadFile = File(...)):
+async def infer(request: Request, photo: UploadFile = File(...)):
     if photo.content_type.split("/")[0] != "image":
         raise HTTPException(400, "Only image uploads are supported.")
+
+    try:
+        allowed = check_and_increment(_client_key(request), limit=INFER_RATE_LIMIT, window_minutes=60)
+    except Exception:
+        allowed = True  # don't block real requests if the rate-limit table itself has a problem
+    if not allowed:
+        raise HTTPException(429, f"Rate limit exceeded ({INFER_RATE_LIMIT} photo lookups/hour). Try again later.")
+
     img_bytes = await photo.read()
     try:
         return infer_category(img_bytes, mime_type=photo.content_type)
@@ -67,11 +84,16 @@ def shopping_list(payload: ShoppingListRequest):
         if payload.kroger_location_id:
             try:
                 for kroger_match in kroger_client.search_products(term, payload.kroger_location_id, limit=3):
+                    per_unit_price, per_unit_label = unit_price_info(
+                        kroger_match["price"], kroger_match.get("pack_qty"), kroger_match.get("pack_unit")
+                    )
                     matches.append({
                         "product_name": kroger_match["product_name"],
                         "vendor": "Kroger",
                         "price": kroger_match["price"],
                         "similarity": None,
+                        "price_per_unit": per_unit_price,
+                        "price_per_unit_label": per_unit_label,
                     })
             except Exception:
                 pass

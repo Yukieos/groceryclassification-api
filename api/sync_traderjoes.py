@@ -1,6 +1,7 @@
 import argparse
 
 from db import get_connection, normalize
+from size_parse import parse_pack_size
 from traderjoes_client import fetch_store_catalog
 
 # User's NYC stores (from traderjoes.com store locator), so a plain
@@ -38,12 +39,16 @@ def sync(store_code: str, vendor_label: str = "Trader Joe's"):
         price = item.get("retail_price")
         if not title or not price:
             continue
+        size_text = " ".join(filter(None, [item.get("sales_size"), item.get("sales_uom_description")]))
+        pack_qty, pack_unit = parse_pack_size(size_text) if size_text else (None, None)
+        if pack_qty is None:
+            pack_qty, pack_unit = parse_pack_size(title)
         cur.execute(
             """
-            INSERT INTO products (source, vendor, store_code, full_name, normalized_name, unit_price)
-            VALUES ('trader_joes', %s, %s, %s, %s, %s)
+            INSERT INTO products (source, vendor, store_code, full_name, normalized_name, unit_price, pack_qty, pack_unit)
+            VALUES ('trader_joes', %s, %s, %s, %s, %s, %s, %s)
             """,
-            (vendor_label, store_code, title, normalize(title), float(price)),
+            (vendor_label, store_code, title, normalize(title), float(price), pack_qty, pack_unit),
         )
         inserted += 1
 

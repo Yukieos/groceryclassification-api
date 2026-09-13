@@ -1,6 +1,8 @@
 import os
 import psycopg2
 
+from size_parse import unit_price_info
+
 
 def get_connection():
     return psycopg2.connect(
@@ -24,7 +26,7 @@ def search_price(term: str, limit: int = 5):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT full_name, vendor, unit_price,
+            SELECT full_name, vendor, unit_price, pack_qty, pack_unit,
                    strict_word_similarity(%s, lower(full_name)) AS sim
             FROM products
             WHERE %s <<%% lower(full_name)
@@ -40,12 +42,18 @@ def search_price(term: str, limit: int = 5):
         rows = cur.fetchall()
     finally:
         conn.close()
-    return [
-        {
-            "product_name": row[0],
-            "vendor": row[1],
-            "price": float(row[2]),
-            "similarity": round(row[3], 2),
-        }
-        for row in rows
-    ]
+
+    results = []
+    for full_name, vendor, price, pack_qty, pack_unit, sim in rows:
+        price = float(price)
+        pack_qty = float(pack_qty) if pack_qty is not None else None
+        per_unit_price, per_unit_label = unit_price_info(price, pack_qty, pack_unit)
+        results.append({
+            "product_name": full_name,
+            "vendor": vendor,
+            "price": price,
+            "similarity": round(sim, 2),
+            "price_per_unit": per_unit_price,
+            "price_per_unit_label": per_unit_label,
+        })
+    return results

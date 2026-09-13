@@ -3,6 +3,8 @@ import time
 
 import requests
 
+from size_parse import parse_pack_size
+
 TOKEN_URL = "https://api.kroger.com/v1/connect/oauth2/token"
 API_BASE = "https://api.kroger.com/v1"
 
@@ -50,14 +52,22 @@ def search_products(term: str, location_id: str, limit: int = 3):
     for product in resp.json().get("data", []):
         items = product.get("items") or []
         price = None
+        size_text = None
         for item in items:
             price_info = item.get("price") or {}
             price = price_info.get("promo") or price_info.get("regular")
+            size_text = item.get("size")
             if price:
                 break
         if not price:
             continue
-        results.append({"product_name": product.get("description"), "price": float(price)})
+        pack_qty, pack_unit = parse_pack_size(size_text) if size_text else (None, None)
+        results.append({
+            "product_name": product.get("description"),
+            "price": float(price),
+            "pack_qty": pack_qty,
+            "pack_unit": pack_unit,
+        })
     return results
 
 

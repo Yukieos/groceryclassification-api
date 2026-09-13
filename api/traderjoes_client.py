@@ -14,6 +14,8 @@ query SearchProducts($pageSize: Int, $currentPage: Int, $storeCode: String, $pub
       item_title
       retail_price
       availability
+      sales_size
+      sales_uom_description
     }
     total_count
     page_info {
