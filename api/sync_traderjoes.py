@@ -1,6 +1,7 @@
 import argparse
 
 from db import get_connection, normalize, record_price_observation
+from gemini_embed import embed_text
 from size_parse import parse_pack_size
 from traderjoes_client import fetch_store_catalog
 
@@ -43,12 +44,19 @@ def sync(store_code: str, vendor_label: str = "Trader Joe's"):
         pack_qty, pack_unit = parse_pack_size(size_text) if size_text else (None, None)
         if pack_qty is None:
             pack_qty, pack_unit = parse_pack_size(title)
+
+        try:
+            embedding = embed_text(title, task_type="RETRIEVAL_DOCUMENT")
+        except Exception as e:
+            embedding = None
+            print(f"  embedding failed for {title!r}: {e}")
+
         cur.execute(
             """
-            INSERT INTO products (source, vendor, store_code, full_name, normalized_name, unit_price, pack_qty, pack_unit)
-            VALUES ('trader_joes', %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO products (source, vendor, store_code, full_name, normalized_name, unit_price, pack_qty, pack_unit, embedding)
+            VALUES ('trader_joes', %s, %s, %s, %s, %s, %s, %s, %s)
             """,
-            (vendor_label, store_code, title, normalize(title), float(price), pack_qty, pack_unit),
+            (vendor_label, store_code, title, normalize(title), float(price), pack_qty, pack_unit, embedding),
         )
         record_price_observation(cur, normalize(title), vendor_label, "trader_joes", float(price))
         inserted += 1

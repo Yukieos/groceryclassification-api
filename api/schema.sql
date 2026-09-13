@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
@@ -17,9 +18,13 @@ CREATE TABLE IF NOT EXISTS products (
 -- Safe to re-run against the existing table (pre-dates these columns).
 ALTER TABLE products ADD COLUMN IF NOT EXISTS pack_qty NUMERIC;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS pack_unit TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS embedding vector(768);
 
 CREATE INDEX IF NOT EXISTS idx_products_full_name_trgm
     ON products USING gin (lower(full_name) gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_products_embedding
+    ON products USING hnsw (embedding vector_cosine_ops);
 
 -- One row per (product, vendor, day) - built from real search traffic and
 -- from CSV/Trader-Joe's imports, so "lowest in 30 days" has something to
