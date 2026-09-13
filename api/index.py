@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import kroger_client
-from db import search_price
+from db import get_connection, normalize, record_price_observation, search_price, thirty_day_low
 from gemini_client import infer_category
 from rate_limit import check_and_increment
 from size_parse import unit_price_info
@@ -83,20 +83,34 @@ def shopping_list(payload: ShoppingListRequest):
 
         if payload.kroger_location_id:
             try:
-                for kroger_match in kroger_client.search_products(term, payload.kroger_location_id, limit=3):
-                    per_unit_price, per_unit_label = unit_price_info(
-                        kroger_match["price"], kroger_match.get("pack_qty"), kroger_match.get("pack_unit")
-                    )
-                    matches.append({
-                        "product_name": kroger_match["product_name"],
-                        "vendor": "Kroger",
-                        "price": kroger_match["price"],
-                        "similarity": None,
-                        "price_per_unit": per_unit_price,
-                        "price_per_unit_label": per_unit_label,
-                    })
+                kroger_matches = kroger_client.search_products(term, payload.kroger_location_id, limit=3)
             except Exception:
-                pass
+                kroger_matches = []
+
+            if kroger_matches:
+                conn = get_connection()
+                try:
+                    cur = conn.cursor()
+                    for kroger_match in kroger_matches:
+                        per_unit_price, per_unit_label = unit_price_info(
+                            kroger_match["price"], kroger_match.get("pack_qty"), kroger_match.get("pack_unit")
+                        )
+                        normalized = normalize(kroger_match["product_name"])
+                        record_price_observation(cur, normalized, "Kroger", "kroger", kroger_match["price"])
+                        low_30d = thirty_day_low(cur, normalized, "Kroger")
+                        matches.append({
+                            "product_name": kroger_match["product_name"],
+                            "vendor": "Kroger",
+                            "price": kroger_match["price"],
+                            "similarity": None,
+                            "price_per_unit": per_unit_price,
+                            "price_per_unit_label": per_unit_label,
+                            "thirty_day_low": low_30d,
+                            "is_thirty_day_low": low_30d is not None and kroger_match["price"] <= low_30d,
+                        })
+                    conn.commit()
+                finally:
+                    conn.close()
 
         matches.sort(key=lambda m: m["price"])
         per_item_matches[term] = matches

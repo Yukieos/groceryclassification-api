@@ -1,7 +1,7 @@
 import argparse
 import csv
 
-from db import get_connection, normalize
+from db import get_connection, normalize, record_price_observation
 from size_parse import parse_pack_size
 
 
@@ -33,6 +33,7 @@ def import_csv(path: str):
                 """,
                 (vendor, full_name, normalized, row.get("category"), price, pack_qty, pack_unit),
             )
+            record_price_observation(cur, normalized, vendor, "manual", price)
             count += 1
 
     conn.commit()

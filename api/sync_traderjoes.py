@@ -1,6 +1,6 @@
 import argparse
 
-from db import get_connection, normalize
+from db import get_connection, normalize, record_price_observation
 from size_parse import parse_pack_size
 from traderjoes_client import fetch_store_catalog
 
@@ -50,6 +50,7 @@ def sync(store_code: str, vendor_label: str = "Trader Joe's"):
             """,
             (vendor_label, store_code, title, normalize(title), float(price), pack_qty, pack_unit),
         )
+        record_price_observation(cur, normalize(title), vendor_label, "trader_joes", float(price))
         inserted += 1
 
     conn.commit()
