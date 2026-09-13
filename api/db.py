@@ -28,10 +28,14 @@ def search_price(term: str, limit: int = 5):
                    strict_word_similarity(%s, lower(full_name)) AS sim
             FROM products
             WHERE %s <<%% lower(full_name)
-            ORDER BY sim DESC, unit_price ASC
+            ORDER BY
+                (lower(category) = %s) DESC,
+                sim DESC,
+                length(full_name) ASC,
+                unit_price ASC
             LIMIT %s
             """,
-            (term_lower, term_lower, limit),
+            (term_lower, term_lower, term_lower, limit),
         )
         rows = cur.fetchall()
     finally:
